@@ -42,7 +42,7 @@ const scene = new THREE.Scene();
 
 console.log("Create a perspective projection camera");
 var camera = new THREE.PerspectiveCamera( 45, window.innerWidth/window.innerHeight, 0.1, 1000 );
-camera.position.set(-175, 115, 5);
+camera.position.set(-240, 150, 8);
 
 console.log("Create the renderer");
 const renderer = new THREE.WebGL1Renderer();
@@ -119,9 +119,37 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 function onMouseMove(event) {
-    event.preventDefault();
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+  event.preventDefault();
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+  const tooltip = document.getElementById('planet-tooltip');
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  let found = null;
+  for (let i = 0; i < intersects.length; i++) {
+    const planetObj = identifyPlanet(intersects[i].object);
+if (planetObj) {
+  const nombresES = {
+    'Mercury': 'Mercurio', 'Venus': 'Venus', 'Earth': 'Tierra', 'Mars': 'Marte',
+    'Jupiter': 'Júpiter', 'Saturn': 'Saturno', 'Uranus': 'Urano', 'Neptune': 'Neptuno', 'Pluto': 'Plutón'
+  };
+  found = nombresES[planetObj.name] || planetObj.name;
+  break;
+}
+  }
+
+  if (found) {
+    tooltip.innerText = found;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (event.clientX + 15) + 'px';
+    tooltip.style.top = (event.clientY + 15) + 'px';
+    document.body.style.cursor = 'pointer';
+  } else {
+    tooltip.style.display = 'none';
+    document.body.style.cursor = 'default';
+  }
 }
 
 // ******  SELECT PLANET  ******
@@ -192,28 +220,215 @@ function identifyPlanet(clickedObject) {
 
   return null;
 }
+const mitologicoAudios = {
+  'Mars': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781393933/The_Planets_-_Nr.1_-_Mars_the_Bringer_of_War_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_zvqq2t.mp3',
+  'Venus': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781398588/The_Planets_-_Nr.2_-_Venus_the_Bringer_of_Peace_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_zpw9qi.mp3',
+  'Mercury': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781400238/The_Planets_-_Nr.3_-_Mercury_the_Winged_Messenger_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_jwhsfk.mp3',
+  'Jupiter': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781400389/The_Planets_-_Nr.4_-_Jupiter_the_Bringer_of_Jollity_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_kdditk.mp3',
+  'Saturn': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781400480/The_Planets_-_Nr.5_-_Saturn_the_Bringer_of_Old_Age_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_tvzosf.mp3',
+  'Uranus': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781400469/The_Planets_-_Nr.6_-_Uranus_the_Magician_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_hnijtf.mp3',
+  'Neptune': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781400475/The_Planets_-_Nr.7_-_Neptune_the_Mystic_-_Gustav_Holst_-_Berlin_Philharmonic_Orchestra_hyg3cf.mp3'
+};
 
+let currentAudio = null;
+let currentTimeouts = [];
 // ******  SHOW PLANET INFO AFTER SELECTION  ******
 function showPlanetInfo(planet) {
-  var info = document.getElementById('planetInfo');
-  var name = document.getElementById('planetName');
-  var details = document.getElementById('planetDetails');
+  if (window.rutaActual === 'mitologico') {
+    const info = document.getElementById('planetInfo');
+    const titleEN = document.getElementById('planetTitleEN');
+    const titleES = document.getElementById('planetTitleES');
+    const fixedText = document.getElementById('planetFixedText');
+    const extraTexts = document.getElementById('planetExtraTexts');
+    const planetTitle = document.getElementById('planetTitle');
+    const planetContent = document.getElementById('planetContent');
 
-  name.innerText = planet;
-  details.innerText = `Radius: ${planetData[planet].radius}\nTilt: ${planetData[planet].tilt}\nRotation: ${planetData[planet].rotation}\nOrbit: ${planetData[planet].orbit}\nDistance: ${planetData[planet].distance}\nMoons: ${planetData[planet].moons}\nInfo: ${planetData[planet].info}`;
+    const titulo = holstTitles[planet] || { en: planet, es: '' };
+    titleEN.innerText = titulo.en;
+    titleES.innerText = titulo.es;
 
-  info.style.display = 'block';
+    const textos = mitologicoTextos[planet] || { fijo: '', extra: [] };
+    fixedText.innerText = textos.fijo;
+    extraTexts.innerHTML = '';
+
+    // Detener audio anterior y limpiar timeouts
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    currentTimeouts.forEach(t => clearTimeout(t));
+    currentTimeouts = [];
+
+    // Reset visual
+    planetTitle.style.top = '50%';
+    planetTitle.style.fontSize = '2.8rem';
+    planetContent.style.opacity = '0';
+    info.style.display = 'block';
+    info.style.pointerEvents = 'auto';
+
+    setTimeout(() => {
+      planetTitle.style.top = '15%';
+      planetTitle.style.fontSize = '1.8rem';
+      setTimeout(() => {
+        planetContent.style.opacity = '1';
+      }, 1000);
+    }, 2000);
+
+    // Reproducir audio si existe
+    if (mitologicoAudios[planet]) {
+      currentAudio = new Audio(mitologicoAudios[planet]);
+      currentAudio.play();
+
+      // Programar tarjetas extra
+      textos.extra.forEach(({ tiempo, texto }) => {
+        const t = setTimeout(() => {
+          const div = document.createElement('div');
+          div.innerText = texto;
+          div.style.cssText = `
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            animation: fadeInOut 30s ease forwards;
+            pointer-events: none;
+          `;
+          extraTexts.appendChild(div);
+          setTimeout(() => div.remove(), 30000);
+        }, tiempo);
+        currentTimeouts.push(t);
+      });
+    }
+
+  } else if (window.rutaActual === 'cientifico') {
+    const info = document.getElementById('planetInfo');
+    const titleEN = document.getElementById('planetTitleEN');
+    const titleES = document.getElementById('planetTitleES');
+    const fixedText = document.getElementById('planetFixedText');
+    const extraTexts = document.getElementById('planetExtraTexts');
+    const planetTitle = document.getElementById('planetTitle');
+    const planetContent = document.getElementById('planetContent');
+
+    const titulo = cienciaTitles[planet] || { en: planet, es: '' };
+    titleEN.innerText = titulo.en;
+    titleES.innerText = titulo.es;
+
+    const textos = cienciaTextos[planet] || { fijo: '', extra: [] };
+    fixedText.innerText = textos.fijo;
+    extraTexts.innerHTML = '';
+
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    currentTimeouts.forEach(t => clearTimeout(t));
+    currentTimeouts = [];
+
+    planetTitle.style.top = '50%';
+    planetTitle.style.fontSize = '2.8rem';
+    planetContent.style.opacity = '0';
+    info.style.display = 'block';
+    info.style.pointerEvents = 'auto';
+
+    setTimeout(() => {
+      planetTitle.style.top = '15%';
+      planetTitle.style.fontSize = '1.8rem';
+      setTimeout(() => {
+        planetContent.style.opacity = '1';
+      }, 1000);
+    }, 2000);
+
+    if (cienciaAudios[planet]) {
+      currentAudio = new Audio(cienciaAudios[planet]);
+      currentAudio.play();
+    }
+
+  } else if (window.rutaActual === 'emocional') {
+    const info = document.getElementById('planetInfo');
+    const titleEN = document.getElementById('planetTitleEN');
+    const titleES = document.getElementById('planetTitleES');
+    const fixedText = document.getElementById('planetFixedText');
+    const extraTexts = document.getElementById('planetExtraTexts');
+    const planetTitle = document.getElementById('planetTitle');
+    const planetContent = document.getElementById('planetContent');
+
+    const titulo = emocionalTitles[planet] || { en: planet, es: '' };
+    titleEN.innerText = titulo.en;
+    titleES.innerText = titulo.es;
+
+    const textos = emocionalTextos[planet] || { fijo: '', extra: [] };
+    fixedText.innerText = textos.fijo;
+    extraTexts.innerHTML = '';
+
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    currentTimeouts.forEach(t => clearTimeout(t));
+    currentTimeouts = [];
+
+    planetTitle.style.top = '50%';
+    planetTitle.style.fontSize = '2.8rem';
+    planetContent.style.opacity = '0';
+    info.style.display = 'block';
+    info.style.pointerEvents = 'auto';
+
+    setTimeout(() => {
+      planetTitle.style.top = '15%';
+      planetTitle.style.fontSize = '1.8rem';
+      setTimeout(() => {
+        planetContent.style.opacity = '1';
+      }, 1000);
+    }, 2000);
+
+    if (emocionalAudios[planet]) {
+      currentAudio = new Audio(emocionalAudios[planet]);
+      currentAudio.play();
+
+      textos.extra.forEach(({ tiempo, texto }) => {
+        const t = setTimeout(() => {
+          const div = document.createElement('div');
+          div.innerText = texto;
+          div.style.cssText = `
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            animation: fadeInOut 30s ease forwards;
+            pointer-events: none;
+          `;
+          extraTexts.appendChild(div);
+          setTimeout(() => div.remove(), 30000);
+        }, tiempo);
+        currentTimeouts.push(t);
+      });
+    }
+
+  } else {
+    var info = document.getElementById('planetInfo');
+    var name = document.getElementById('planetName');
+    var details = document.getElementById('planetDetails');
+    if (name && details) {
+      name.innerText = planet;
+      details.innerText = `Radius: ${planetData[planet].radius}\nTilt: ${planetData[planet].tilt}\nRotation: ${planetData[planet].rotation}\nOrbit: ${planetData[planet].orbit}\nDistance: ${planetData[planet].distance}\nMoons: ${planetData[planet].moons}\nInfo: ${planetData[planet].info}`;
+    }
+  }
 }
 let isZoomingOut = false;
 let zoomOutTargetPosition = new THREE.Vector3(-175, 115, 5);
 // close 'x' button function
 function closeInfo() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  currentTimeouts.forEach(t => clearTimeout(t));
+  currentTimeouts = [];
   var info = document.getElementById('planetInfo');
   info.style.display = 'none';
+  info.style.pointerEvents = 'none';
   settings.accelerationOrbit = 1;
   isZoomingOut = true;
   controls.target.set(0, 0, 0);
 }
+window.closeInfo = closeInfo;
 window.closeInfo = closeInfo;
 // close info when clicking another planet
 function closeInfoNoZoomOut() {
@@ -523,7 +738,188 @@ const uranus = new createPlanet('Uranus', 25/4, 320, 82, uranusTexture, null, {
 });
 const neptune = new createPlanet('Neptune', 24/4, 340, 28, neptuneTexture);
 const pluto = new createPlanet('Pluto', 1, 350, 57, plutoTexture)
+const holstTitles = {
+  'Mercury': { en: 'Mercury, the Winged Messenger', es: 'Mercurio, el Mensajero Alado' },
+  'Venus': { en: 'Venus, the Bringer of Peace', es: 'Venus, el Portador de la Paz' },
+  'Earth': { en: 'Earth', es: 'Tierra' },
+  'Mars': { en: 'Mars, the Bringer of War', es: 'Marte, el Portador de la Guerra' },
+  'Jupiter': { en: 'Jupiter, the Bringer of Jollity', es: 'Júpiter, el Portador de la Alegría' },
+  'Saturn': { en: 'Saturn, the Bringer of Old Age', es: 'Saturno, el Portador de la Vejez' },
+  'Uranus': { en: 'Uranus, the Magician', es: 'Urano, el Mago' },
+  'Neptune': { en: 'Neptune, the Mystic', es: 'Neptuno, el Místico' },
+  'Pluto': { en: 'Pluto', es: 'Plutón' }
+};
 
+const mitologicoTextos = {
+  'Mars': {
+    fijo: 'Inspirada en el significado astrológico de Marte y en el dios romano de la guerra, esta pieza representa el conflicto, la fuerza y la agresividad. Holst utiliza ritmos repetitivos, sonidos intensos y una atmósfera de tensión para transmitir la energía de la batalla y el enfrentamiento.',
+    extra: [
+      { tiempo: 30000, texto: 'Los primeros compases de Marte pueden interpretarse como el avance de una fuerza que se aproxima lentamente. Para crear esta sensación, Holst utiliza el col legno, una técnica en la que las cuerdas son golpeadas con la madera del arco, produciendo un sonido seco y repetitivo que recuerda a una marcha. Poco a poco se incorporan sonidos más graves que aportan una atmósfera amenazante, mientras la música gana intensidad de forma gradual.' },
+      { tiempo: 120000, texto: 'Tras el ritmo insistente del inicio, aparece una melodía más amplia que aporta un carácter más melódico a la obra. Sin embargo, esta no llega a sentirse tranquila o estable, ya que el patrón rítmico del fondo continúa presente. El contraste entre ambos elementos crea una sensación de tensión constante, incluso en los momentos más melódicos.' },
+      { tiempo: 240000, texto: 'La tensión acumulada a lo largo de la obra vuelve a crecer. Los instrumentos comienzan a unirse en una misma idea musical, creando la sensación de que una fuerza inmensa se aproxima de forma inevitable. Con el regreso de los sonidos graves y la potencia de toda la orquesta, la amenaza que antes se intuía en la distancia parece revelarse por completo.' },
+      { tiempo: 420000, texto: 'En los compases finales, la amenaza que se había ido construyendo a lo largo de la obra alcanza su máxima expresión. Más que representar una batalla o un ejército específico, la música puede evocar una fuerza inmensa, devastadora y difícil de comprender. Holst refuerza esta sensación mediante la bitonalidad, una técnica que superpone tonalidades distintas y genera una tensión constante. La obra culmina con acordes monumentales y un volumen extremo, cerrando el movimiento con una sensación de conflicto sin resolución.' }
+    ]
+  }
+  ,
+  'Venus': {
+    fijo: 'Venus representa la armonía, el amor y la serenidad. Basada en la diosa romana de la belleza y en su simbolismo astrológico, la obra emplea melodías suaves y delicadas que crean una sensación de calma y equilibrio.',
+    extra: [
+      { tiempo: 30000, texto: 'El solo de corno francés inicial transmite una sensación inmediata de calma y suavidad. Presenta una línea melódica larga y sostenida, sin ataques bruscos, lo que establece una atmósfera tranquila desde el comienzo. Este inicio es respondido por un delicado entramado de flautas, que refuerza la sensación de ligereza y continuidad. Las notas ascienden de forma suave mediante intervalos como cuartas y quintas justas, evitando la tensión armónica y generando una sensación de suspensión, como si la música quedara flotando en el espacio, pintando un paisaje sonoro estático y etéreo.' },
+      { tiempo: 120000, texto: 'La obra mantiene una sensación constante de equilibrio y reposo. Las armonías consonantes evitan fricción entre las notas, lo que refuerza una percepción de estabilidad. Las diferentes líneas de la orquesta avanzan de forma coordinada, creando una textura ordenada y sin conflicto interno. El tempo lento y flexible contribuye a una sensación de continuidad tranquila, sin sobresaltos.' },
+      { tiempo: 240000, texto: 'La música adquiere un carácter más amplio y luminoso, sin perder la calma general. Las melodías se desarrollan de manera ascendente y progresiva, sin saltos abruptos, lo que genera una sensación de crecimiento suave y continuo. Las dinámicas aumentan gradualmente, mientras que el uso de arpa aporta un color brillante y ligero que refuerza una atmósfera etérea.' },
+      { tiempo: 360000, texto: 'El cierre de Venus refuerza una sensación clara de paz y estabilidad emocional. La orquestación se conserva ligera, con predominio de registros medios y agudos, evitando cualquier sensación de peso excesivo. La ausencia de disonancias marcadas, ritmos irregulares o acentos fuertes contribuye a una idea de equilibrio total, donde la música no genera tensión ni conflicto. Todo se sostiene en una calma continua que transmite tranquilidad, seguridad y un estado de reposo prolongado.' }
+    ]
+  },
+  'Mercury': {
+    fijo: 'Inspirada en Mercurio, mensajero de los dioses romanos, esta pieza simboliza la comunicación, la inteligencia y el movimiento. Sus melodías ligeras y cambios constantes de ritmo evocan rapidez, agilidad y dinamismo.',
+    extra: [
+      { tiempo: 30000, texto: 'El inicio de Mercurio transmite una sensación de energía inmediata y movimiento constante. El tempo prestissimo genera una velocidad extrema que hace que la música se perciba siempre en acción, sin momentos de reposo. Esto se refuerza con notas en staccato, cortas y separadas, que funcionan como impulsos rápidos y ligeros. El uso de un registro agudo y sin peso en los graves contribuye a una sensación de agilidad, donde todo se siente rápido pero liviano, como un flujo continuo de movimiento.' },
+      { tiempo: 120000, texto: 'La obra mantiene de principio a fin una sensación de movimiento ininterrumpido. Las cuerdas en staccato y el uso del pizzicato crean una sucesión constante de impulsos breves que se encadenan sin pausa, evitando cualquier sensación de reposo. La orquestación cambiante refuerza la vitalidad del movimiento, ya que el sonido pasa rápidamente entre distintos instrumentos sin mantenerse fijo en uno solo. Esto genera una sensación de agilidad continua, donde la música no se detiene ni pierde impulso hasta el final.' }
+    ]
+  },
+  'Jupiter': {
+    fijo: 'Júpiter está asociado con la prosperidad, el optimismo y la celebración. Inspirado en el rey de los dioses romanos y en su significado astrológico, este movimiento destaca por su carácter enérgico y festivo, lleno de melodías brillantes y expansivas.',
+    extra: [
+      { tiempo: 30000, texto: 'El inicio de Júpiter transmite una sensación de energía brillante y movimiento alegre. Los ritmos con síncopas generan un impulso constante, ya que los acentos aparecen en lugares inesperados, lo que hace que la música se sienta siempre en movimiento. La alternancia entre compases de dos y tres tiempos aporta variedad al ritmo, creando una sensación de danza continua y celebración.' },
+      { tiempo: 180000,texto: 'La sección central cambia a un carácter más lento y melódico, donde las líneas ascendentes en los cellos se vuelven más amplias y expresivas. Este tipo de melodías crea una sensación de crecimiento emocional, ya que los movimientos hacia registros más altos se perciben como expansión. El uso de tonalidad mayor refuerza una sensación de alegría clara.' },
+      { tiempo: 300000, texto: 'El regreso al ritmo rápido recupera la energía de la danza, pero con más fuerza después de la sección anterior. El uso de crescendos hace que el volumen aumente poco a poco, lo que genera una sensación de energía que crece constantemente. La combinación de ritmo rápido y aumento de intensidad refuerza la idea de una alegría que sigue expandiéndose sin detenerse.' },
+      { tiempo: 420000, texto: 'El final reúne a toda la orquesta en una sonoridad grande y brillante. Todos los instrumentos participan en un ritmo de danza rápido, creando una textura llena y poderosa. El uso de fortissimo y el cierre final enérgico generan una sensación de celebración máxima, como una explosión de alegría colectiva donde toda la música converge en un mismo clímax festivo.' }
+    ]
+  },
+  'Saturn': {
+    fijo: 'Saturno representa el paso del tiempo, la experiencia y la madurez. La música comienza con un carácter solemne y pausado, reflejando el avance de los años, y evoluciona hacia una atmósfera más reflexiva y serena.',
+    extra: [
+      { tiempo: 30000, texto: 'El inicio de Saturno transmite una sensación de lentitud extrema y peso en cada sonido. El tempo muy lento hace que cada nota se sienta importante y con carga, como si el tiempo avanzara con dificultad. Las notas graves refuerzan esta sensación de peso, haciendo que el paso del tiempo se perciba lento y constante. Esto crea una atmósfera de vejez y experiencia acumulada, como un caminar pausado con toda una vida detrás.' },
+      { tiempo: 180000, texto: 'La música introduce un patrón repetitivo en las cuerdas que se mantiene de forma constante, como un "tic-tac" que no se detiene. Esta repetición genera la sensación de un tiempo que avanza sin control y sin pausa. El tempo sigue siendo lento y pesado, lo que refuerza una sensación de inevitabilidad, como si el paso del tiempo fuera algo que no se puede detener.' },
+      { tiempo: 300000, texto: 'La música empieza a volverse más tensa, con momentos donde las notas parecen chocar entre sí antes de resolverse lentamente. Esto crea una sensación de conflicto prolongado, ya que las tensiones no desaparecen de inmediato, sino que tardan en resolverse. La obra transmite aquí una sensación de lucha constante, como si el tiempo y la experiencia fueran una carga emocional continua.' },
+      { tiempo: 360000, texto: 'El volumen crece de forma gradual hasta llegar a un punto muy intenso, donde toda la orquesta suena con fuerza. Este aumento progresivo da la sensación de acumulación, como si todo lo vivido se reuniera en un solo momento. Después del clímax, la música comienza a calmarse lentamente, dejando una sensación de aceptación y serenidad final. Esto transmite la idea de una transformación del sufrimiento en paz, como una llegada a la calma después de una larga experiencia.' }
+    ]
+  },
+  'Uranus': {
+    fijo: 'Inspirada en Urano como símbolo de cambio y sorpresa, esta pieza presenta contrastes marcados, giros inesperados y momentos de gran energía. Holst crea una atmósfera que recuerda a un mago realizando actos llenos de ingenio y misterio.',
+    extra: [
+      { tiempo: 30000, texto: 'El inicio de Urano transmite una sensación de magia más bien cómica y exagerada. El xilófono con figuras rápidas y brillantes aporta un timbre ligero y algo "juguetón", que se asocia más a una estética de circo o algo burlesco que a una magia seria. Los metales con ritmo pesado refuerzan esta idea, creando una sensación de fuerza que suena exagerada y poco refinada. Esto genera la impresión de algo mágico pero más teatral que misterioso.' },
+      { tiempo: 120000, texto: 'La música crece hasta un clímax muy fuerte, donde toda la orquesta suena al mismo tiempo con gran volumen. Esta combinación de xilófono, metales y orquesta completa crea una sensación de poder muy intenso, pero también algo exagerado, como si todo estuviera llevado al límite. El efecto es el de una energía que se desborda completamente.' },
+      { tiempo: 240000, texto: 'Después del clímax, la música cae de forma rápida y la energía parece disminuir por un momento. Sin embargo, al final la música vuelve a crecer con fuerza. El regreso de la melodía principal del xilófono, junto con el aumento del volumen, crea una sensación de ciclo en la energía: primero se libera con fuerza, luego baja brevemente y finalmente vuelve a intensificarse. El cierre en fortissimo genera una sensación de final explosivo, donde toda la energía se concentra en el último momento. Esto transmite una fuerza burlesca que funciona en ciclos de tensión y liberación hasta el final.' }
+    ]
+  },
+  'Neptune': {
+    fijo: 'Neptuno representa el mundo de los sueños, la espiritualidad y lo desconocido. Para expresar estas ideas, Holst utiliza armonías etéreas y un coro femenino distante que genera una sensación de misterio y profundidad.',
+    extra: [
+      { tiempo: 5000, texto: 'El inicio de Neptuno transmite una sensación de misterio y lejanía. El flautín y la flauta presentan una melodía en registro agudo, con movimientos cromáticos que no resuelven de forma clara, lo que genera una sensación de inestabilidad. El arpa aporta un brillo suave y continuo, mientras que instrumentos como la celesta y el glockenspiel añaden un sonido cristalino que refuerza la idea de algo distante. Los trinos y movimientos oscilantes en las cuerdas hacen que la música se sienta impredecible, como si no tuviera un camino fijo.' },
+      { tiempo: 90000, texto: 'La música se vuelve cada vez más difusa, sin una melodía clara ni un ritmo definido. En lugar de una estructura tradicional, la orquesta trabaja con fragmentos suaves de sonido en volumen muy bajo, lo que crea una sensación de flotación. Las armonías no llegan a resolverse completamente, lo que refuerza la idea de algo que no se estabiliza ni "aterriza" en un lugar concreto. Esto transmite una sensación de espacio abierto y sin límites claros.' },
+      { tiempo: 360000, texto: 'En esta sección entra un coro femenino casi imperceptible, cantando sin palabras en un registro alto. Su sonido es suave y etéreo, lo que hace que se perciba como algo que no pertenece del todo al mundo físico. El hecho de que el coro esté ubicado fuera de escena refuerza la sensación de distancia, como si el sonido viniera de un lugar lejano o desconocido. Esto crea una atmósfera de misterio más profunda y envolvente.' },
+      { tiempo: 480000, texto: 'El final se construye con un descenso muy gradual del volumen, donde el coro y la orquesta se van apagando lentamente. Las repeticiones suaves hacen que la música se disuelva poco a poco, sin un cierre brusco. La sensación final es la de un sonido que desaparece en el espacio, como si se alejara cada vez más hasta no escucharse. Esto transmite la idea de un final abierto, donde la música no termina de forma clara, sino que se desvanece hacia lo infinito.' }
+    ]
+  },
+  'Earth': {
+    fijo: 'A diferencia de los demás planetas, la Tierra no aparece en Los Planetas de Gustav Holst. Desde la perspectiva de la obra, nuestro mundo es el lugar desde donde observamos el cielo, imaginamos historias y exploramos el universo. No es uno de los personajes de la suite, sino el escenario desde el cual se desarrolla el viaje.',
+    extra: []
+  }
+};
+const cienciaTitles = {
+  'Jupiter': { en: 'Jupiter Sonification', es: 'Sonificación de Júpiter' },
+  'Saturn': { en: 'Saturn Sonification', es: 'Sonificación de Saturno' },
+  'Uranus': { en: 'Uranus Sonification', es: 'Sonificación de Urano' }
+};
+
+const cienciaTextos = {
+  'Jupiter': {
+    fijo: 'La sonificación de Júpiter se realizó a partir de datos de rayos X registrados por Chandra y una imagen infrarroja tomada por el Telescopio Espacial Hubble. Durante el proceso, una línea de activación recorrió la composición y convirtió distintos datos en sonido: los rayos X del entorno se tradujeron en instrumentos de viento, mientras que el paso por el planeta activó notas más graves y densas. La información de las auroras y de la Gran Mancha Roja se representó mediante variaciones en el tono y en la intensidad sonora.',
+    extra: []
+  },
+  'Saturn': {
+    fijo: 'La sonificación de Saturno combinó datos de rayos X de Chandra con una imagen óptica obtenida por la misión Cassini. El sonido se generó mediante un barrido que recorre la composición y asigna a cada elemento visual un parámetro auditivo específico. Los anillos se tradujeron en un efecto de sirena cuya frecuencia sigue su forma, mientras que el planeta activó sonidos más graves y sostenidos. Las zonas con mayor actividad energética se diferenciaron con tonos sintéticos más agudos.',
+    extra: []
+  },
+  'Uranus': {
+    fijo: 'La sonificación de Urano se construyó con datos de Chandra y del Observatorio WM Keck. En este caso, el sistema de sonificación asignó el brillo al volumen y la posición vertical al tono, de modo que los elementos más brillantes se escuchan más fuertes y agudos. La forma de los anillos se convirtió en una línea sonora ascendente, y los datos del planeta se tradujeron en un patrón auditivo que permite seguir su estructura sin necesidad de recurrir a una descripción visual.',
+    extra: []
+  }
+};
+const cienciaAudios = {
+  'Jupiter': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781478325/sonify11_jupiter_e8ifek.mp3',
+  'Saturn': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781478325/sonify11_saturn_hkcerk.mp3',
+  'Uranus': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781478325/sonify11_uranus_pk8crl.mp3'
+};
+const emocionalTitles = {
+  'Jupiter': { en: 'Like a Dog Chasing Cars', es: 'JÚPITER — Escudo de caos y gravedad' },
+  'Earth': { en: 'Can You Hear The Music', es: 'TIERRA — Caos Perfecto' },
+  'Mars': { en: 'Married Life', es: 'MARTE — El Planeta de los Recuerdos' },
+  'Uranus': { en: 'Define Dancing', es: 'URANO — Coreografía Invisible' },
+  'Neptune': { en: 'Nemo Egg', es: 'NEPTUNO — El Silencio de la Distancia' },
+  'Venus': { en: 'The End Game', es: 'VENUS — Peligro' },
+  'Mercury': { en: 'Gravity Swallows Light', es: 'MERCURIO — El Pozo Gravitatorio' },
+  'Saturn': { en: 'Cornfield Chase', es: 'SATURNO — La Geometría del Cosmos' }
+};
+
+const emocionalAudios = {
+  'Jupiter': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781547129/Hans_Zimmer_James_Newton_Howard_-_Like_A_Dog_Chasing_Cars_Official_Audio_ljz0ug.mp3',
+  'Earth': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781491922/Can_You_Hear_The_Music_ppkkhh.mp3',
+  'Mars': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781492638/Married_Life_xptcwv.mp3',
+  'Uranus': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781494124/Define_Dancing_p9umhv.mp3',
+  'Neptune': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781494858/Nemo_Egg_Main_Title_cmqen3.mp3',
+  'Venus': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781542504/The_End_Game_Avengers__Infinity_War_Soundtrack_dtbft3.mp3',
+  'Mercury': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781543685/Gravity_Swallows_Light_a7tmhd.mp3',
+  'Saturn': 'https://res.cloudinary.com/dm2wz7juo/video/upload/v1781544306/Interstellar_Official_Soundtrack_Cornfield_Chase_Hans_Zimmer_WaterTower_bzpy3n.mp3'
+};
+const emocionalTextos = {
+  'Jupiter': {
+    fijo: '"Like a Dog Chasing Cars" hace parte de la banda sonora de The Dark Knight, compuesta por Hans Zimmer y James Newton Howard. La pieza transmite una tensión constante entre caos y control, con una sensación de amenaza creciente e inestabilidad que se intensifica hasta volverse muy tensa y emocional, como si todo estuviera siempre al borde del colapso.',
+    extra: [
+      { tiempo: 20000, texto: 'La pieza se basa en un ostinato, un ritmo repetitivo que avanza con una fuerza descomunal y no se detiene. Esta sensación de energía y movimiento constante recuerda a Júpiter, un gigante que gira sobre su propio eje a una velocidad extraordinaria y cuya enorme masa lo convierte en una de las fuerzas gravitacionales más poderosas del sistema solar, capaz de atraer, desviar y capturar cuerpos celestes a su paso.' },
+      { tiempo: 180000, texto: 'La pieza transmite una sensación de peligro inminente, de un caos que te atrapa y del que no puedes escapar. Las texturas electrónicas y los metales agresivos refuerzan esta sensación de energía descontrolada. Una impresión similar puede encontrarse en Júpiter, un planeta que no tiene una superficie sólida, sino un océano de gases violentos. Su característica más famosa es la Gran Mancha Roja, una tormenta gigantesca más grande que la Tierra entera que lleva activa al menos 300 años, con vientos que superan los 400 km/h. Como la música, Júpiter parece un sistema en constante caos que se alimenta de su propia energía.' },
+      { tiempo: 240000, texto: 'En la pieza, una melodía épica, pesada y melancólica aparece en el momento más crítico de la persecución, cuando el caos alcanza su punto máximo y una figura interviene para enfrentarlo directamente. La música transmite el peso del sacrificio, como si toda la violencia recayera en una sola decisión para proteger a los demás, incluso asumiendo ser visto como enemigo con tal de mantener la paz. En el interior de Júpiter, la presión extrema convierte el hidrógeno en un océano de hidrógeno metálico líquido y podría provocar "lluvias de diamantes". Su gravedad actúa como un escudo cósmico que desvía asteroides y protege a la Tierra, mostrando un entorno violento que, aun así, genera estabilidad a partir de la propia presión.' }
+    ]
+  },
+  'Earth': {
+    fijo: '"Can You Hear The Music" es la pieza central de Oppenheimer, compuesta por Ludwig Göransson. Inspirada en la metáfora del físico Niels Bohr sobre "escuchar la música" como el arte de entender la armonía oculta del universo, la obra utiliza 21 cambios de tempo para reflejar una paradoja entre el caos y la creación. En el cosmos, esta obra representa a la Tierra, un planeta que encarna esa misma dualidad, donde las fuerzas más caóticas y destructivas de la física se alinearon en una armonía perfecta para dar origen a la vida humana.',
+    extra: [
+      { tiempo: 60000, texto: 'La pieza arranca con un torbellino de violines que aceleran drásticamente entre los 180 y 350 BPM. Este inicio musical describe el "punto crítico" de la materia, el caos primitivo, los choques de partículas y las fuerzas físicas desbocadas en el espacio. Sin embargo, la precisión matemática con la que la orquesta ejecuta estos cambios refleja cómo la Tierra procesó ese desorden. La música ilustra que, en medio de un universo violento, el planeta logró que cada elemento encajara a la perfección, convirtiendo el peligro en una base estable que permitió el nacimiento de nuestra existencia.' }
+    ]
+  },
+  'Mars': {
+    fijo: '"Married Life" es la obra maestra de Michael Giacchino para la película Up. A través de un vals que evoluciona desde la alegría hasta una profunda melancolía, la pieza musicaliza el paso del tiempo y los ciclos de la vida. En el espacio, esta composición representa a Marte, un mundo que hoy es un desierto frío y silencioso, pero que esconde la nostalgia de un pasado donde alguna vez albergó agua, calor y la promesa de la vida.',
+    extra: [
+      { tiempo: 30000, texto: 'El arranque optimista de "Married Life" representa el pasado de Marte. Hace miles de millones de años, era un planeta vivo, azul, con ríos, lagos y una atmósfera cálida. Ese vals alegre es la música de un Marte joven que alguna vez tuvo la promesa de albergar vida, corriendo en el cosmos con la misma ilusión y energía con la que Carl y Ellie construían su casa y su futuro desde cero.' },
+      { tiempo: 200000, texto: 'A medida que la canción avanza, la música cambia de tono y describe la madurez del planeta, Marte fue perdiendo su atmósfera lentamente, su agua se evaporó y comenzó a enfriarse. El final lento y melancólico del piano es el Marte que conocemos hoy. Un planeta solitario y silencioso, donde los robots que enviamos caminan por la arena como ancianos buscando los recuerdos de un pasado que ya no va a volver; la hermosa y triste nostalgia de lo que alguna vez estuvo lleno de vida y hoy descansa en paz.' }
+    ]
+  },
+'Uranus': {
+    fijo: '"Define Dancing", de Thomas Newman para WALL-E, musicaliza la sincronía de dos robots moviéndose juntos en el espacio. A través de un patrón de cuerdas rápido y minimalista, la pieza transmite un equilibrio perfecto. En el universo, esta composición representa a Urano y sus lunas pastoras, un sistema donde pequeños satélites orbitan en los bordes de los anillos, interactuando con las partículas para mantenerlas en su lugar a través de la gravedad.',
+    extra: [
+      { tiempo: 30000, texto: 'El inicio rápido y constante de la canción describe el juego cósmico en los anillos de Urano. Al ser estructuras tan delgadas, las partículas de hielo deberían dispersarse en el espacio, pero no lo hacen gracias a las lunas pastoras que corren en círculos perfectos por los bordes. El ritmo minimalista de la música imita esta interacción continua, donde los pequeños satélites avanzan en una trayectoria exacta por la zona más silenciosa del sistema solar.' },
+      { tiempo: 90000, texto: 'A medida que los instrumentos se suman y se sincronizan, la música refleja el equilibrio de las lunas operando en pareja. Al igual que los personajes de la película coordinando sus movimientos en el vacío, estas lunas utilizan su gravedad para guiar a los fragmentos de hielo, manteniéndolos alineados en su órbita. La melodía ilustra esta física sutil, una coreografía invisible de atracción donde el orden de los cuerpos celestes crea una armonía eterna.' }
+    ]
+  },
+  'Neptune': {
+    fijo: '"Nemo Egg", compuesta por Thomas Newman para Buscando a Nemo, transmite una melancolía calmada, una mezcla de belleza y soledad que invita a la reflexión. En el sistema solar, este sentimiento coincide con la realidad de Neptuno, el planeta más lejano de todos. Al encontrarse en el borde de nuestro sistema, es un mundo aislado y silencioso que avanza a su propio ritmo en la penumbra del espacio.',
+    extra: [
+      { tiempo: 30000, texto: 'Las notas de piano, espaciadas y sin prisa, reflejan el movimiento de Neptuno, que al ser el planeta más distante tarda 165 años terrestres en dar una sola vuelta al Sol. A su vez, el fondo suave de las cuerdas describe el aislamiento de este gigante de hielo, que flota a miles de millones de kilómetros en un entorno oscuro. La música de Newman capta esa tristeza reflexiva, la tranquilidad de un mundo que existe en una quietud perpetua y solitaria.' }
+    ]
+  },
+  'Venus': {
+    fijo: '"The End Game" de Alan Silvestri para Avengers Infinity War utiliza un pulso pesado y un tono sombrío que transmiten una sensación de finalidad y un peligro inevitable. En el sistema solar esta atmósfera tan amenazante encaja con Venus, un planeta que representa el entorno más letal y destructivo donde nada puede sobrevivir.',
+    extra: [
+      { tiempo: 30000, texto: 'El ritmo pesado de la música transmite una constante sensación de opresión. Describe la entrada a un mundo hostil imitando ese peligro invisible que te atrapa y te encierra a medida que te acercas a la superficie de Venus, donde el ambiente se siente pesado, denso y completamente inhabitable.' },
+      { tiempo: 135000, texto: 'La entrada de una melodía más lenta refleja un paisaje completamente solitario porque las condiciones extremas impiden cualquier rastro de vida. Hacia el final la música vuelve a estallar con fuerza emulando el golpe destructivo de un entorno que aplasta y consume todo lo que intenta tocar su suelo.' }
+    ]
+  },
+  'Mercury': {
+    fijo: '"Gravity Swallows Light" es una pieza de Ludwig Göransson para la película Oppenheimer. El tema hace referencia a las investigaciones del físico sobre el colapso de las estrellas y la formación de los agujeros negros, utilizando cuerdas continuas y sintetizadores para generar una atmósfera de densidad y compresión. En el sistema solar, esta composición se relaciona con Mercurio debido a su posición, al ser el planeta más cercano al Sol, se encuentra en la zona con mayor afectación y deformación gravitatoria de nuestro entorno cósmico.',
+    extra: [
+      { tiempo: 40000, texto: 'La música se desarrolla mediante un conjunto de cuerdas agudas que sostienen notas largas sobre un fondo electrónico constante. Esta estructura lineal y tensa refleja la condición orbital de Mercurio. Debido a la proximidad del Sol, el planeta se mueve en un espacio-tiempo fuertemente curvado por la masa solar, lo que provoca una precesión en su órbita que la física de Newton no podía explicar y que posteriormente sirvió para comprobar la Teoría de la Relatividad General de Einstein.' },
+      { tiempo: 130000, texto: 'Hacia la segunda mitad, los acordes ganan peso y volumen, transmitiendo una sensación de presión y aislamiento. Esta evolución musical coincide con las características ambientales de Mercurio. Es un mundo desprovisto de atmósfera significativa, expuesto directamente a la radiación y al viento solar. La pieza describe sonoramente un cuerpo celeste que, debido a la fuerza de gravedad de su estrella, carece de dinamismo geológico propio y permanece atrapado en un ciclo extremo de temperaturas.' }
+    ]
+  },
+  'Saturn': {
+    fijo: '"Cornfield Chase" es una de las piezas centrales de la banda sonora de Interstellar, compuesta por Hans Zimmer. La obra está estructurada alrededor de un órgano y un conjunto de cuerdas que repiten un patrón circular en aumento constante, transmitiendo una sensación de orden, escala y asombro matemático. En el universo, esta composición representa a Saturno, un planeta definido por la simetría perfecta de sus anillos y una presencia monumental que domina el espacio exterior de forma armónica.',
+    extra: [
+      { tiempo: 35000, texto: 'La pieza introduce una melodía repetitiva que simula un engranaje o un reloj en movimiento constante. Esta estructura rítmica describe la mecánica de los anillos de Saturno. Aunque desde lejos parecen una estructura sólida y estática, en realidad están formados por miles de millones de fragmentos de hielo y roca que orbitan al planeta a velocidades exactas. La música imita este movimiento perpetuo, donde cada partícula sigue una trayectoria geométrica sin romper el equilibrio del sistema.' },
+      { tiempo: 80000, texto: 'En este punto, el órgano alcanza su volumen máximo y las cuerdas se expanden, creando una sonoridad masiva pero organizada. Esta evolución musical coincide con la escala física de Saturno. El planeta es un gigante gaseoso tan denso y grande que altera la gravedad de todo el sistema solar exterior, pero a diferencia de la turbulencia de Júpiter, Saturno mantiene una apariencia serena y pulida. La música refleja esa paradoja: una fuerza física descomunal expresada a través de una melodía limpia y ordenada.' }
+    ]
+  }
+};
   // ******  PLANETS DATA  ******
   const planetData = {
     'Mercury': {
@@ -789,4 +1185,157 @@ window.addEventListener('resize', function(){
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);
   composer.setSize(window.innerWidth,window.innerHeight);
+});
+// ---- INTRO CINEMATICA ----
+const introScreen = document.getElementById('intro-screen');
+const introVideo = document.getElementById('intro-video');
+
+const frases = [
+  { texto: "Durante siglos, el ser humano alzó la vista al cielo y se preguntó qué había ahí arriba.", tiempo: 10000, duracion: 10000 },
+  { texto: "Primero creamos historias con nuestra imaginación y les pusimos nombres a las luces del cielo. Las convertimos en dioses y guerreros, otorgándoles personalidades, virtudes y defectos que daban sentido al mundo.", tiempo: 20000, duracion: 10000 },
+  { texto: "Pero la curiosidad del ser humano no se quedó solo en la imaginación. Lo llevó a investigar. A explorar el espacio. A mandar sondas y telescopios. Descubrimos que el universo resultó ser más extraño de lo que cualquier historia imaginó.", tiempo: 31000, duracion: 10000 },
+  { texto: "Y, aun así, seguimos dándoles significado. Interpretándolos. Asignándoles emociones. Relacionándolos con lo que somos.", tiempo: 42000, duracion: 10000 },
+  { texto: "Es momento de mirar al cielo una vez más.", tiempo: 51000, duracion: 4000 },
+  { texto: "Bienvenidos al sistema solar.", tiempo: 55000, duracion: 10000 }
+];
+
+frases.forEach(({ texto, tiempo, duracion = 10000 }) => {
+  setTimeout(() => {
+    const div = document.createElement('div');
+    div.innerText = texto;
+    div.style.cssText = `
+      position: absolute;
+      bottom: 15%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 1.2rem;
+      text-align: center;
+      max-width: 70%;
+      font-family: Georgia, serif;
+      text-shadow: 0 0 20px rgba(255,255,255,0.5);
+      background: rgba(0, 0, 0, 0.45);
+      padding: 16px 24px;
+      border-radius: 8px;
+      animation: fadeInOut ${duracion/1000}s ease forwards;
+    `;
+    introScreen.appendChild(div);
+    setTimeout(() => div.remove(), duracion);
+  }, tiempo);
+});
+
+introVideo.addEventListener('ended', () => {
+  introScreen.style.transition = 'opacity 1.5s';
+  introScreen.style.opacity = '0';
+  setTimeout(() => {
+    introScreen.style.display = 'none';
+
+    // Mostrar pantalla promocional
+    const promoScreen = document.getElementById('promo-screen');
+    const promoTitle = document.getElementById('promo-title');
+    const promoContent = document.getElementById('promo-content');
+
+    promoScreen.style.opacity = '1';
+
+    // Después de 2 segundos, mover el título hacia arriba
+    setTimeout(() => {
+      promoTitle.style.top = '15%';
+      promoTitle.style.fontSize = '1.8rem';
+
+      // Mostrar el texto y los botones
+      setTimeout(() => {
+        promoContent.style.opacity = '1';
+      }, 1000);
+    }, 2000);
+
+  }, 1500);
+});
+
+// Botones de rutas
+document.querySelectorAll('.ruta-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const ruta = btn.getAttribute('data-ruta');
+    window.rutaActual = ruta;
+    console.log('Ruta seleccionada:', ruta);
+
+    const promoScreen = document.getElementById('promo-screen');
+    promoScreen.style.transition = 'opacity 1.5s';
+    promoScreen.style.opacity = '0';
+
+    setTimeout(() => {
+      promoScreen.style.display = 'none';
+      document.body.classList.remove('no-scene');
+
+      // Mostrar texto introductorio si la ruta es mitológico
+      if (ruta === 'mitologico') {
+        const introMito = document.getElementById('intro-mitologico');
+        introMito.style.opacity = '1';
+        introMito.style.pointerEvents = 'auto';
+
+        setTimeout(() => {
+          introMito.style.opacity = '0';
+          setTimeout(() => {
+            introMito.style.pointerEvents = 'none';
+          }, 1500);
+        }, 20000);
+      }
+if (ruta === 'cientifico') {
+  const introCient = document.getElementById('intro-cientifico');
+  introCient.style.opacity = '1';
+  introCient.style.pointerEvents = 'auto';
+
+  setTimeout(() => {
+    introCient.style.opacity = '0';
+    setTimeout(() => {
+      introCient.style.pointerEvents = 'none';
+    }, 1500);
+  }, 20000);
+}
+if (ruta === 'emocional') {
+  const introEmo = document.getElementById('intro-emocional');
+  introEmo.style.opacity = '1';
+  introEmo.style.pointerEvents = 'auto';
+
+  setTimeout(() => {
+    introEmo.style.opacity = '0';
+    setTimeout(() => {
+      introEmo.style.pointerEvents = 'none';
+    }, 1500);
+  }, 20000);
+}
+    }, 1500);
+  });
+});
+document.getElementById('closePlanetInfo').addEventListener('click', closeInfo);
+document.getElementById('back-to-rutas').addEventListener('click', () => {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  currentTimeouts.forEach(t => clearTimeout(t));
+  currentTimeouts = [];
+
+  const info = document.getElementById('planetInfo');
+  info.style.display = 'none';
+  info.style.pointerEvents = 'none';
+
+  document.body.classList.add('no-scene');
+
+  const promoScreen = document.getElementById('promo-screen');
+  promoScreen.style.display = 'flex';
+  promoScreen.style.opacity = '1';
+
+  const promoTitle = document.getElementById('promo-title');
+  const promoContent = document.getElementById('promo-content');
+  promoTitle.style.top = '50%';
+  promoTitle.style.fontSize = '3.5rem';
+  promoContent.style.opacity = '0';
+
+  setTimeout(() => {
+    promoTitle.style.top = '15%';
+    promoTitle.style.fontSize = '1.8rem';
+    setTimeout(() => {
+      promoContent.style.opacity = '1';
+    }, 1000);
+  }, 500);
 });
